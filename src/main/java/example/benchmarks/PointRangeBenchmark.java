@@ -1,6 +1,5 @@
 package example.benchmarks;
 
-import example.basic.SimpleSearch;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -8,7 +7,6 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TopScoreDocCollectorManager;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
@@ -72,9 +70,9 @@ public class PointRangeBenchmark {
                 }
 
                 for (int i = 0; i < queries.length; i++) {
-                    TopScoreDocCollectorManager manager = new TopScoreDocCollectorManager(10, Integer.MAX_VALUE);
+                    //TopScoreDocCollectorManager manager = new TopScoreDocCollectorManager(10, Integer.MAX_VALUE);
                     long start = System.nanoTime();
-                    searcher.search(queries[i], manager);
+                    searcher.search(queries[i], 10);
                     long time = System.nanoTime() - start;
                     int bucket = 63 - Long.numberOfLeadingZeros(time);
                     timeBuckets[bucket]++;
