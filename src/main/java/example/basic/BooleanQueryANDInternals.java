@@ -142,7 +142,8 @@ public class BooleanQueryANDInternals {
         // below.)
         @Override
         public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-            return new BinaryAndWeight(this, searcher.createWeight(left, scoreMode, boost), searcher.createWeight(right, scoreMode, boost));
+            return null;
+            //return new BinaryAndWeight(this, searcher.createWeight(left, scoreMode, boost), searcher.createWeight(right, scoreMode, boost));
         }
     }
 
@@ -151,108 +152,108 @@ public class BooleanQueryANDInternals {
     // For our purposes, the role of the `Weight` implementation is to hold the `Weight` instances for the operands,
     // create the `Scorer` for each segment, and implement the `explain` method.
     //
-    private static class BinaryAndWeight extends Weight {
-        private final Weight leftWeight;
-        private final Weight rightWeight;
-
-        public BinaryAndWeight(Query query, Weight leftWeight, Weight rightWeight) {
-            super(query);
-            this.leftWeight = leftWeight;
-            this.rightWeight = rightWeight;
-        }
-
-        // Every `Weight` is expected to implement the `explain` method to show how a given document's score was
-        // derived (or to explain why a non-matching document did not match).
-        @Override
-        public Explanation explain(LeafReaderContext context, int doc) throws IOException {
-            Explanation leftExplain = leftWeight.explain(context, doc);
-            Explanation rightExplain = rightWeight.explain(context, doc);
-            if (!leftExplain.isMatch()) {
-                return Explanation.noMatch("no match on required clause (" + leftWeight.getQuery().toString() + ")", leftExplain);
-            } else if (!rightExplain.isMatch()) {
-                return Explanation.noMatch("no match on required clause (" + rightWeight.getQuery().toString() + ")", rightExplain);
-            }
-            Scorer scorer = scorer(context);
-            int advanced = scorer.iterator().advance(doc);
-            assert advanced == doc;
-            return Explanation.match(scorer.score(), "sum of:", leftExplain, rightExplain);
-        }
-
-        // We return our custom `Scorer` implementation for a given index segment, after creating the scorers for
-        // each of our operands.
-        @Override
-        public ScorerSupplier scorerSupplier(LeafReaderContext context) throws IOException {
-            ScorerSupplier leftScorerSupplier = leftWeight.scorerSupplier(context);
-            ScorerSupplier rightScorerSupplier = rightWeight.scorerSupplier(context);
-            Weight weight = this;
-            return new ScorerSupplier() {
-                @Override
-                public Scorer get(long l) throws IOException {
-                    return new BinaryAndScorer(weight, leftScorerSupplier.get(l), rightScorerSupplier.get(l));
-                }
-
-                @Override
-                public long cost() {
-                    // Worst case, we match everything from left and right.
-                    return leftScorerSupplier.cost() + rightScorerSupplier.cost();
-                }
-            };
-        }
-
-        // The `IndexSearcher` holds a `QueryCache` instance that may store the matching doc IDs for a given query.
-        // Not all queries are readily cacheable, though, so the `IndexSearcher` asks the weight if it is cacheable
-        // or not.
-        @Override
-        public boolean isCacheable(LeafReaderContext ctx) {
-            return leftWeight.isCacheable(ctx) && rightWeight.isCacheable(ctx);
-        }
-    }
+//    private static class BinaryAndWeight extends Weight {
+//        private final Weight leftWeight;
+//        private final Weight rightWeight;
+//
+//        public BinaryAndWeight(Query query, Weight leftWeight, Weight rightWeight) {
+//            super(query);
+//            this.leftWeight = leftWeight;
+//            this.rightWeight = rightWeight;
+//        }
+//
+//        // Every `Weight` is expected to implement the `explain` method to show how a given document's score was
+//        // derived (or to explain why a non-matching document did not match).
+//        @Override
+//        public Explanation explain(LeafReaderContext context, int doc) throws IOException {
+//            Explanation leftExplain = leftWeight.explain(context, doc);
+//            Explanation rightExplain = rightWeight.explain(context, doc);
+//            if (!leftExplain.isMatch()) {
+//                return Explanation.noMatch("no match on required clause (" + leftWeight.getQuery().toString() + ")", leftExplain);
+//            } else if (!rightExplain.isMatch()) {
+//                return Explanation.noMatch("no match on required clause (" + rightWeight.getQuery().toString() + ")", rightExplain);
+//            }
+//            Scorer scorer = scorer(context);
+//            int advanced = scorer.iterator().advance(doc);
+//            assert advanced == doc;
+//            return Explanation.match(scorer.score(), "sum of:", leftExplain, rightExplain);
+//        }
+//
+//        // We return our custom `Scorer` implementation for a given index segment, after creating the scorers for
+//        // each of our operands.
+//        @Override
+//        public ScorerSupplier scorerSupplier(LeafReaderContext context) throws IOException {
+//            ScorerSupplier leftScorerSupplier = leftWeight.scorerSupplier(context);
+//            ScorerSupplier rightScorerSupplier = rightWeight.scorerSupplier(context);
+//            Weight weight = this;
+//            return new ScorerSupplier() {
+//                @Override
+//                public Scorer get(long l) throws IOException {
+//                    return new BinaryAndScorer(weight, leftScorerSupplier.get(l), rightScorerSupplier.get(l));
+//                }
+//
+//                @Override
+//                public long cost() {
+//                    // Worst case, we match everything from left and right.
+//                    return leftScorerSupplier.cost() + rightScorerSupplier.cost();
+//                }
+//            };
+//        }
+//
+//        // The `IndexSearcher` holds a `QueryCache` instance that may store the matching doc IDs for a given query.
+//        // Not all queries are readily cacheable, though, so the `IndexSearcher` asks the weight if it is cacheable
+//        // or not.
+//        @Override
+//        public boolean isCacheable(LeafReaderContext ctx) {
+//            return leftWeight.isCacheable(ctx) && rightWeight.isCacheable(ctx);
+//        }
+//    }
 
     // ### Scorer class
     //
     // Next, we need to implement the `Scorer` class. Most of the interesting logic lives in the `Scorer`'s associated
     // `DocIdSetIterator`.
-    private static class BinaryAndScorer extends Scorer {
-        private final Scorer leftScorer;
-        private final Scorer rightScorer;
-        private final DocIdSetIterator docIdSetIterator;
-
-        public BinaryAndScorer(Weight weight, Scorer leftScorer, Scorer rightScorer) {
-            this.leftScorer = leftScorer;
-            this.rightScorer = rightScorer;
-            this.docIdSetIterator = new BinaryAndDocIdSetIterator(leftScorer.iterator(), rightScorer.iterator());
-        }
-
-        // If this scorer is pointing at a doc ID, then both the left and right scorers must be pointing at the
-        // same doc ID (since it's the current match for the left AND right).
-        @Override
-        public int docID() {
-            assert leftScorer.docID() == rightScorer.docID();
-            return docIdSetIterator.docID();
-        }
-
-        @Override
-        public DocIdSetIterator iterator() {
-            return docIdSetIterator;
-        }
-
-        // This `getMaxScore` can be used to skip entire blocks of uncompetitive documents, by providing an upper bound
-        // on the possible score of a match. In this case, we ask each of our subscorers what their maximum scores
-        // are `upTo` some future target and sum them together. But the max from `left` and the max from `right` might
-        // not come from the same document, so there may not actually be a document with this score. That's okay,
-        // though -- the skipping is a best-effort optimization.
-        @Override
-        public float getMaxScore(int upTo) throws IOException {
-            return leftScorer.getMaxScore(upTo) + rightScorer.getMaxScore(upTo);
-        }
-
-        // Consistent with BooleanQuery (using MUST clauses), we sum up the scores of our individual clauses.
-        @Override
-        public float score() throws IOException {
-            assert leftScorer.docID() == rightScorer.docID();
-            return leftScorer.score() + rightScorer.score();
-        }
-    }
+//    private static class BinaryAndScorer extends Scorer {
+//        private final Scorer leftScorer;
+//        private final Scorer rightScorer;
+//        private final DocIdSetIterator docIdSetIterator;
+//
+//        public BinaryAndScorer(Weight weight, Scorer leftScorer, Scorer rightScorer) {
+//            this.leftScorer = leftScorer;
+//            this.rightScorer = rightScorer;
+//            this.docIdSetIterator = new BinaryAndDocIdSetIterator(leftScorer.iterator(), rightScorer.iterator());
+//        }
+//
+//        // If this scorer is pointing at a doc ID, then both the left and right scorers must be pointing at the
+//        // same doc ID (since it's the current match for the left AND right).
+//        @Override
+//        public int docID() {
+//            assert leftScorer.docID() == rightScorer.docID();
+//            return docIdSetIterator.docID();
+//        }
+//
+//        @Override
+//        public DocIdSetIterator iterator() {
+//            return docIdSetIterator;
+//        }
+//
+//        // This `getMaxScore` can be used to skip entire blocks of uncompetitive documents, by providing an upper bound
+//        // on the possible score of a match. In this case, we ask each of our subscorers what their maximum scores
+//        // are `upTo` some future target and sum them together. But the max from `left` and the max from `right` might
+//        // not come from the same document, so there may not actually be a document with this score. That's okay,
+//        // though -- the skipping is a best-effort optimization.
+//        @Override
+//        public float getMaxScore(int upTo) throws IOException {
+//            return leftScorer.getMaxScore(upTo) + rightScorer.getMaxScore(upTo);
+//        }
+//
+//        // Consistent with BooleanQuery (using MUST clauses), we sum up the scores of our individual clauses.
+//        @Override
+//        public float score() throws IOException {
+//            assert leftScorer.docID() == rightScorer.docID();
+//            return leftScorer.score() + rightScorer.score();
+//        }
+//    }
 
 
     // ## The DocIdSetIterator class
