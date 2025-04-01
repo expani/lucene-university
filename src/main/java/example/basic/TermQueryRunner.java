@@ -16,8 +16,8 @@ public class TermQueryRunner {
 
     public static void main(String[] args) throws IOException {
 
-        if (args.length != 3) {
-            System.out.println("Usage: <FieldName> <Field Value> <index dir>");
+        if (args.length < 3) {
+            System.out.println("Usage: <FieldName> <Field Value> <index dir> <hits : optional>");
             System.exit(1);
         }
 
@@ -25,10 +25,22 @@ public class TermQueryRunner {
         String fieldValue = args[1];
         String indexPath = args[2];
 
+        int hits = args.length > 3 ? Integer.parseInt(args[3]) : 0;
+
         try (IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPath)))) {
             IndexSearcher searcher = new IndexSearcher(reader);
+            TermQuery termQuery = new TermQuery(new Term(fieldName, fieldValue));
+
+            int blackhole = 0;
+
+            for (int i=1; i<=10_000; i++) {
+                blackhole += searcher.search(termQuery, hits).scoreDocs.length;
+            }
+
+            System.out.println("Warmup done with scored docs: " + blackhole);
+
             long start = System.nanoTime();
-            TopDocs topDocs = searcher.search(new TermQuery(new Term(fieldName, fieldValue)), 10_000);
+            TopDocs topDocs = searcher.search(termQuery, hits);
             double took = (System.nanoTime() - start) / 1_000_000.0;
             int maxDocId = Integer.MIN_VALUE;
             for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
