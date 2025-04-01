@@ -17,7 +17,7 @@ public class TermQueryRunner {
     public static void main(String[] args) throws IOException {
 
         if (args.length < 3) {
-            System.out.println("Usage: <FieldName> <Field Value> <index dir> <hits : optional>");
+            System.out.println("Usage: <FieldName> <Field Value> <index dir> <hits : optional> <warmup iters>");
             System.exit(1);
         }
 
@@ -27,13 +27,15 @@ public class TermQueryRunner {
 
         int hits = args.length > 3 ? Integer.parseInt(args[3]) : 0;
 
+        int warmupIters = args.length > 4 ? Integer.parseInt(args[4]) : 0;
+
         try (IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(indexPath)))) {
             IndexSearcher searcher = new IndexSearcher(reader);
             TermQuery termQuery = new TermQuery(new Term(fieldName, fieldValue));
 
             int blackhole = 0;
 
-            for (int i=1; i<=10_000; i++) {
+            for (int i = 1; i <= warmupIters; i++) {
                 blackhole += searcher.search(termQuery, hits).scoreDocs.length;
             }
 
