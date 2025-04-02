@@ -2,15 +2,22 @@ package example.basic;
 
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.CollectionTerminatedException;
+import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.LeafCollector;
+import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TermQueryRunner {
 
@@ -33,13 +40,34 @@ public class TermQueryRunner {
             IndexSearcher searcher = new IndexSearcher(reader);
             TermQuery termQuery = new TermQuery(new Term(fieldName, fieldValue));
 
-            int blackhole = 0;
+            System.out.println("Starting warmup");
+            long warmupStart = System.nanoTime();
+
+            Collector collector = new Collector() {
+                @Override
+                public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
+                    return new LeafCollector() {
+                        @Override
+                        public void setScorer(Scorable scorer) {}
+
+                        @Override
+                        public void collect(int doc) {
+                            throw new CollectionTerminatedException();
+                        }
+                    };
+                }
+
+                @Override
+                public ScoreMode scoreMode() {
+                    return ScoreMode.TOP_SCORES;
+                }
+            };
 
             for (int i = 1; i <= warmupIter; i++) {
-                blackhole += searcher.search(termQuery, hits).scoreDocs.length;
+                searcher.search(termQuery, collector);
             }
 
-            System.out.println("Warmup done with scored docs: " + blackhole);
+            System.out.println("Warmup took " + (System.nanoTime() - warmupStart) / 1_000_000.0 + " ms using collector " + collector);
 
             long start = System.nanoTime();
             TopDocs topDocs = searcher.search(termQuery, hits);
