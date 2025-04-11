@@ -9,10 +9,10 @@ import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.TopScoreDocCollector;
+import org.apache.lucene.search.TopScoreDocCollectorManager;
 import org.apache.lucene.store.FSDirectory;
 
 import java.io.IOException;
@@ -69,13 +69,10 @@ public class TermQueryRunner {
             System.out.println("Warmup took " + (System.nanoTime() - warmupStart) / 1_000_000.0 + " ms using collector " + collector);
 
             long start = System.nanoTime();
-            TopDocs topDocs = searcher.search(termQuery, hits);
+            TopScoreDocCollector topScoreDocCollector = new TopScoreDocCollectorManager(hits, hits).newCollector();
+            searcher.search(termQuery, topScoreDocCollector);
             double took = (System.nanoTime() - start) / 1_000_000.0;
-            int maxDocId = Integer.MIN_VALUE;
-            for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-                maxDocId = Math.max(maxDocId, scoreDoc.doc);
-            }
-            System.out.println("Query completed with max doc id: " + maxDocId + ", took: " + took + " milliseconds");
+            System.out.println("Query completed and took: " + took + " milliseconds with total hits: " + topScoreDocCollector.getTotalHits());
         }
 
     }
