@@ -11,6 +11,7 @@ import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.search.TopScoreDocCollectorManager;
 import org.apache.lucene.store.FSDirectory;
 
@@ -68,9 +69,10 @@ public class TermQueryRunner {
             System.out.println("Warmup took " + (System.nanoTime() - warmupStart) / 1_000_000.0 + " ms using collector " + collector);
 
             long start = System.nanoTime();
-            searcher.search(termQuery, new TopScoreDocCollectorManager(hits, hits).newCollector());
+            TopScoreDocCollector topScoreDocCollector = new TopScoreDocCollectorManager(hits, hits).newCollector();
+            searcher.search(termQuery, topScoreDocCollector);
             double took = (System.nanoTime() - start) / 1_000_000.0;
-            System.out.println("Query completed and took: " + took + " milliseconds");
+            System.out.println("Query completed and took: " + took + " milliseconds with total hits: " + topScoreDocCollector.getTotalHits());
         }
 
     }
